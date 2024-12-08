@@ -1,3 +1,5 @@
+require 'benchmark'
+
 def is_valid(nums, target)
     if nums.size == 1
         return nums.first == target
@@ -8,6 +10,8 @@ def is_valid(nums, target)
 
     is_valid(nums.dup.unshift((a.to_s + b.to_s).to_i), target) || is_valid(nums.dup.unshift(a + b), target) || is_valid(nums.dup.unshift(a * b), target)
 end
+
+puts Benchmark.measure {
 
 sum = 0
 
@@ -20,3 +24,5 @@ File.open(ARGV[0]).each do |line|
 end
 
 puts sum
+
+}
