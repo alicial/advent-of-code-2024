@@ -11,7 +11,6 @@ Robot = Struct.new('Robot', :x, :y, :vx, :vy) do
   def move
     self.x = next_tile(x + vx, Restroom::WIDTH)
     self.y = next_tile(y + vy, Restroom::HEIGHT)
-    x.zero? ? 1 : 0
   end
 
   def draw
@@ -19,7 +18,7 @@ Robot = Struct.new('Robot', :x, :y, :vx, :vy) do
   end
 
   def ui
-    @ui_text ||= RuTui::Text.new({ x: x, y: y, text: 'O' })
+    @ui ||= RuTui::Text.new({ x: x, y: y, text: 'O' })
   end
 
   def quadrant
