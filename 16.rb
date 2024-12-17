@@ -1,4 +1,3 @@
-require 'pry'
 require 'rutui'
 
 Node = Struct.new('Node', :x, :y, :score) do
@@ -6,12 +5,8 @@ Node = Struct.new('Node', :x, :y, :score) do
     x == node.x && y == node.y
   end
 
-  def ui_text
-    score.nil? ? '.' : 'X'
-  end
-
   def ui
-    @ui ||= RuTui::Text.new({ x: x, y: y, text: ui_text })
+    @ui ||= RuTui::Text.new({ x: x, y: y, text: '.' })
   end
 
   def draw
@@ -37,7 +32,7 @@ class Maze
   def create_grid(input)
     input.each_with_index do |line, y|
       line.chars.each_with_index do |c, x|
-        grid[[x, y]] = Node.new(x, y) if ['.', 'E', 'S'].include?(c)
+        grid[[x, y]] = Node.new(x, y, nil) if ['.', 'E', 'S'].include?(c)
         if c == 'S'
           @start_node = grid[[x, y]]
         elsif c == 'E'
@@ -47,7 +42,7 @@ class Maze
     end
   end
 
-  def neighbors(node, dir, score)
+  def neighbors(node, dir, score, path)
     neighbors = DIRECTIONS.map.with_index do |(dx, dy), di|
       next if (di - 2) % 4 == dir # came from this direction
 
@@ -56,74 +51,72 @@ class Maze
 
       neighbor_score = score + 1
       neighbor_score += 1000 if di != dir
-      if neighbor.score.nil? || neighbor.score > neighbor_score
+      if neighbor.score.nil? || neighbor_score <= neighbor.score + 1000
         neighbor.score = neighbor_score
-        [neighbor, di, neighbor_score]
+        [[neighbor, di, neighbor_score], Set[neighbor].merge(path)]
       end
     end
     neighbors.compact
   end
 
-  def traverse(start_direction)
-    start_node.score = 0
-    queue = [[start_node, start_direction, 0]]
-    lowest_score = Float::INFINITY
-    until queue.empty?
-      new_queue = []
-      until queue.empty?
-        node, dir, score = queue.shift
-        if node.is?(end_node)
-          lowest_score = [lowest_score, score].min
-          next
+  def process(queue, lowest_score, nodes_on_path)
+    new_queue = {}
+    queue.each do |(node, dir, score), path|
+      next if score > lowest_score
+
+      if node.is?(end_node)
+        if score < lowest_score
+          nodes_on_path = path
+          lowest_score = score
         end
-
-        new_queue += neighbors(node, dir, score)
+        next
       end
-      queue = new_queue
-    end
 
-    lowest_score
+      neighbors(node, dir, score, path).each do |k, p|
+        if new_queue.key?(k)
+          new_queue[k].merge(p)
+        else
+          new_queue[k] = p
+        end
+      end
+    end
+    [new_queue, lowest_score, nodes_on_path]
   end
 
-  def draw(start_direction)
+  def traverse(start_direction)
     start_node.score = 0
-    queue = [[start_node, start_direction, 0]]
+    queue = { [start_node, start_direction, 0] => Set[start_node] }
+    lowest_score = Float::INFINITY
+    nodes_on_path = []
+    queue, lowest_score, nodes_on_path = process(queue, lowest_score, nodes_on_path) until queue.empty?
+    [lowest_score, nodes_on_path.size]
+  end
+
+  def visualize(start_direction)
     screen = RuTui::Screen.new
     score_text = RuTui::Text.new({ x: 0, y: 0, text: '' })
     screen.add score_text
     grid.each_value { |node| screen.add(node.ui) }
+
+    start_node.score = 0
+    queue = { [start_node, start_direction, 0] => Set[start_node] }
     lowest_score = Float::INFINITY
-    i = 0
+    nodes_on_path = []
+
     RuTui::ScreenManager.loop(autodraw: true) do |key|
       break if key == 'q' || queue.empty?
 
-      queue.each do |(n, _d)|
-        n.ui.set_text('*')
-      end
-      new_queue = []
-      until queue.empty?
-        node, dir, score = queue.shift
-        if node.is?(end_node)
-          lowest_score = [lowest_score, score].min
-          score_text.set_text(lowest_score.to_s)
-          next
-        end
-        new_queue += neighbors(node, dir, score)
-      end
-      new_queue.each do |(n, _d)|
-        n.ui.set_text('X')
-      end
-      queue = new_queue
-      i += 1
+      queue.each_key { |(n, _)| n.ui.set_text('X') }
+      queue, lowest_score, nodes_on_path = process(queue, lowest_score, nodes_on_path)
+      queue.each_key { |(n, _)| n.ui.set_text('O') }
     end
-    lowest_score
-  end
-
-  def part1
-    traverse(1)
-    # draw(1)
+    [lowest_score, nodes_on_path.size]
   end
 end
 
 maze = Maze.create(IO.readlines(ARGV[0]))
-puts maze.part1
+part1, part2 = maze.traverse(1)
+puts part1
+puts part2
+
+# puts maze.visualize(1)
