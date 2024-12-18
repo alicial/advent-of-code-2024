@@ -1,30 +1,14 @@
-require 'rutui'
-
-Node = Struct.new('Node', :x, :y, :corrupted, :score) do
-  def is?(node)
-    x == node.x && y == node.y
-  end
-
-  def ui_text
-    corrupted ? '#' : '.'
-  end
-
-  def ui
-    @ui ||= RuTui::Text.new({ x: x, y: y, text: ui_text })
-  end
-end
+Node = Struct.new('Node', :x, :y, :corrupted, :score)
 
 class RamRun
-  attr_accessor :grid, :end_node
+  attr_accessor :grid, :corruptions, :end_node
 
   DIRECTIONS = [[0, -1], [1, 0], [0, 1], [-1, 0]].freeze
 
-  def self.create(input, lines_to_read, grid_size)
+  def self.create(input, grid_size)
     ramrun = RamRun.new(grid_size)
-    input.each_with_index do |line, i|
-      x, y = line.split(',').map(&:to_i)
-      ramrun.grid[[x, y]].corrupted = true
-      break if i == lines_to_read - 1
+    ramrun.corruptions = input.map do |line|
+      line.split(',').map(&:to_i)
     end
     ramrun
   end
@@ -39,17 +23,20 @@ class RamRun
     @end_node = @grid[[size, size]]
   end
 
-  def neighbors(node)
-    neighbors = DIRECTIONS.map do |(dx, dy)|
-      neighbor = grid[[node.x + dx, node.y + dy]]
-      next if neighbor.nil? || neighbor.corrupted
+  def reset
+    @grid.each_value do |node|
+      node.score = Float::INFINITY unless node.corrupted
+    end
+  end
 
-      if neighbor.score > node.score + 1
+  def neighbors(node)
+    DIRECTIONS.map do |(dx, dy)|
+      neighbor = grid[[node.x + dx, node.y + dy]]
+      if neighbor && !neighbor.corrupted && neighbor.score > node.score + 1
         neighbor.score = node.score + 1
         neighbor
       end
-    end
-    neighbors.compact
+    end.compact
   end
 
   def process(queue, shortest)
@@ -74,32 +61,35 @@ class RamRun
     shortest
   end
 
-  def visualize
-    screen = RuTui::Screen.new
-    score_text = RuTui::Text.new({ x: 0, y: 0, text: '' })
-    screen.add score_text
-    grid.each_value { |node| screen.add(node.ui) }
+  def corrupt(num)
+    corruptions.each_with_index do |coord, i|
+      break if i == num
 
-    start_node = grid[[0, 0]]
-    start_node.score = 0
-    queue = Set[start_node]
-    shortest = Float::INFINITY
-
-    RuTui::ScreenManager.loop(autodraw: true) do |key|
-      break if key == 'q' || queue.empty?
-
-      queue.each { |(n)| n.ui.set_text('X') }
-      queue, shortest = process(queue, shortest) until queue.empty?
-      queue.each { |(n)| n.ui.set_text('O') }
+      grid[coord].corrupted = true
     end
-    shortest
   end
 
-  def part1
+  def part1(num_corruptions)
+    corrupt(num_corruptions)
     traverse
+  end
+
+  def part2(num_corruptions)
+    corrupt(num_corruptions)
+    while num_corruptions < corruptions.size
+      coord = corruptions[num_corruptions]
+      grid[coord].corrupted = true
+      reset
+      return coord.join(',') if traverse == Float::INFINITY
+
+      num_corruptions += 1
+    end
   end
 end
 
 LINES_TO_READ = 1024
 GRID_SIZE = 70
-puts RamRun.create(IO.readlines(ARGV[0]), LINES_TO_READ, GRID_SIZE).part1
+
+ramrun = RamRun.create(IO.readlines(ARGV[0]), GRID_SIZE)
+puts ramrun.part1(LINES_TO_READ)
+puts ramrun.part2(LINES_TO_READ)
